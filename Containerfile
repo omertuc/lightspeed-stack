@@ -4,7 +4,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal
 ARG APP_ROOT=/app-root
 
 RUN microdnf install -y --nodocs --setopt=keepcache=0 --setopt=tsflags=nodocs \
-    python3.11 python3.11-devel python3.11-pip
+    python3.12 python3.12-devel python3.12-pip
 
 # PYTHONDONTWRITEBYTECODE 1 : disable the generation of .pyc
 # PYTHONUNBUFFERED 1 : force the stdout and stderr streams to be unbuffered
@@ -25,14 +25,14 @@ COPY pyproject.toml LICENSE README.md ./
 
 COPY src ./src
 
-RUN pip3.11 install --no-cache-dir .
+RUN pip3.12 install --no-cache-dir .
 
 # this directory is checked by ecosystem-cert-preflight-checks task in Konflux
 COPY LICENSE /licenses/
 
 # Run the application
 EXPOSE 8080
-CMD ["python3.11", "src/lightspeed_stack.py"]
+CMD ["python3.12", "src/lightspeed_stack.py"]
 
 LABEL vendor="Red Hat, Inc."
 
