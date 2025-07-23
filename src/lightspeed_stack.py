@@ -13,6 +13,7 @@ from runners.uvicorn import start_uvicorn
 from runners.data_collector import start_data_collector
 from configuration import configuration
 from client import LlamaStackClientHolder, AsyncLlamaStackClientHolder
+from patches.llama_stack_patches import apply_all_patches
 
 FORMAT = "%(message)s"
 logging.basicConfig(
@@ -63,6 +64,9 @@ def main() -> None:
     logger.info("Lightspeed stack startup")
     parser = create_argument_parser()
     args = parser.parse_args()
+
+    # Apply monkey patches before loading configuration and clients
+    apply_all_patches()
 
     configuration.load_configuration(args.config_file)
     logger.info("Configuration: %s", configuration.configuration)

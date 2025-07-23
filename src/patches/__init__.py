@@ -1,0 +1,1 @@
+"""Monkey patches module for external dependencies."""
