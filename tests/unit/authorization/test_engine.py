@@ -1,7 +1,7 @@
 """Unit tests for authorization engine."""
 
-from authorization.engine import AuthorizationEngine
-from authorization.models import RoleRule, AccessRule, JsonPathOperator, Action
+from authorization.engine import JwtRolesResolver
+from models.config import JwtRoleRule, AccessRule, JsonPathOperator, Action
 
 
 class TestAuthorizationEngine:
@@ -10,7 +10,7 @@ class TestAuthorizationEngine:
     def test_init(self):
         """Test engine initialization."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.CONTAINS,
                 value="redhat:employees",
@@ -21,10 +21,9 @@ class TestAuthorizationEngine:
             AccessRule(role="employee", actions=[Action.QUERY, Action.GET_MODELS])
         ]
 
-        engine = AuthorizationEngine(role_rules, access_rules)
+        engine = JwtRolesResolver(role_rules, access_rules)
 
         assert engine.role_rules == role_rules
-        assert engine.access_rules == access_rules
         assert "employee" in engine._access_lookup  # pylint: disable=protected-access
         assert (
             Action.QUERY in engine._access_lookup["employee"]
@@ -36,7 +35,7 @@ class TestAuthorizationEngine:
     def test_extract_roles_from_jwt_redhat_employee(self):
         """Test role extraction for RedHat employee JWT."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.CONTAINS,
                 value="redhat:employees",
@@ -44,7 +43,7 @@ class TestAuthorizationEngine:
             )
         ]
         access_rules = []
-        engine = AuthorizationEngine(role_rules, access_rules)
+        engine = JwtRolesResolver(role_rules, access_rules)
 
         jwt_claims = {
             "exp": 1754489339,
@@ -68,7 +67,7 @@ class TestAuthorizationEngine:
     def test_extract_roles_from_jwt_no_match(self):
         """Test role extraction when no rules match."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.CONTAINS,
                 value="redhat:employees",
@@ -76,7 +75,7 @@ class TestAuthorizationEngine:
             )
         ]
         access_rules = []
-        engine = AuthorizationEngine(role_rules, access_rules)
+        engine = JwtRolesResolver(role_rules, access_rules)
 
         jwt_claims = {
             "exp": 1754489339,
@@ -89,19 +88,19 @@ class TestAuthorizationEngine:
     def test_extract_roles_multiple_rules(self):
         """Test role extraction with multiple rules."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.CONTAINS,
                 value="redhat:employees",
                 roles=["employee"],
             ),
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.account_number",
                 operator=JsonPathOperator.EQUALS,
                 value="5910538",
                 roles=["premium_user"],
             ),
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.preferred_username",
                 operator=JsonPathOperator.CONTAINS,
                 value="@redhat.com",
@@ -109,7 +108,7 @@ class TestAuthorizationEngine:
             ),
         ]
         access_rules = []
-        engine = AuthorizationEngine(role_rules, access_rules)
+        engine = JwtRolesResolver(role_rules, access_rules)
 
         jwt_claims = {
             "realm_access": {"roles": ["authenticated", "redhat:employees"]},
@@ -123,14 +122,14 @@ class TestAuthorizationEngine:
     def test_operators_equals(self):
         """Test equals operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.account_number",
                 operator=JsonPathOperator.EQUALS,
                 value="12345",
                 roles=["test_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match
         jwt_claims = {"account_number": "12345"}
@@ -145,14 +144,14 @@ class TestAuthorizationEngine:
     def test_operators_not_equals(self):
         """Test not equals operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.type",
                 operator=JsonPathOperator.NOT_EQUALS,
                 value="service",
                 roles=["human_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match (not service)
         jwt_claims = {"type": "User"}
@@ -167,14 +166,14 @@ class TestAuthorizationEngine:
     def test_operators_contains(self):
         """Test contains operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.email",
                 operator=JsonPathOperator.CONTAINS,
                 value="@redhat.com",
                 roles=["redhat_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match
         jwt_claims = {"email": "user@redhat.com"}
@@ -189,14 +188,14 @@ class TestAuthorizationEngine:
     def test_operators_not_contains(self):
         """Test not contains operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.email",
                 operator=JsonPathOperator.NOT_CONTAINS,
                 value="@test.com",
                 roles=["production_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match (does not contain test.com)
         jwt_claims = {"email": "user@redhat.com"}
@@ -211,14 +210,14 @@ class TestAuthorizationEngine:
     def test_operators_in(self):
         """Test in operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.account_number",
                 operator=JsonPathOperator.IN,
                 value=["12345", "67890", "11111"],
                 roles=["privileged_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match
         jwt_claims = {"account_number": "67890"}
@@ -233,14 +232,14 @@ class TestAuthorizationEngine:
     def test_operators_not_in(self):
         """Test not in operator."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.account_number",
                 operator=JsonPathOperator.NOT_IN,
                 value=["blocked1", "blocked2"],
                 roles=["allowed_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         # Match (not in blocked list)
         jwt_claims = {"account_number": "12345"}
@@ -255,14 +254,14 @@ class TestAuthorizationEngine:
     def test_invalid_jsonpath(self):
         """Test handling of invalid JSONPath expressions."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.invalid[syntax",  # Invalid JSONPath
                 operator=JsonPathOperator.EQUALS,
                 value="test",
                 roles=["test_user"],
             )
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         jwt_claims = {"valid_field": "test"}
         roles = engine.extract_roles_from_jwt(jwt_claims)
@@ -274,7 +273,7 @@ class TestAuthorizationEngine:
             AccessRule(role="employee", actions=[Action.QUERY, Action.GET_MODELS]),
             AccessRule(role="admin", actions=[Action.GET_CONFIG, Action.GET_METRICS]),
         ]
-        engine = AuthorizationEngine([], access_rules)
+        engine = JwtRolesResolver([], access_rules)
 
         # Employee can query
         assert engine.check_access(["employee"], Action.QUERY) is True
@@ -290,7 +289,7 @@ class TestAuthorizationEngine:
     def test_check_access_denied(self):
         """Test access check when permission is denied."""
         access_rules = [AccessRule(role="employee", actions=[Action.QUERY])]
-        engine = AuthorizationEngine([], access_rules)
+        engine = JwtRolesResolver([], access_rules)
 
         # Employee cannot access config
         assert engine.check_access(["employee"], Action.GET_CONFIG) is False
@@ -307,7 +306,7 @@ class TestAuthorizationEngine:
             AccessRule(role="employee", actions=[Action.QUERY, Action.GET_MODELS]),
             AccessRule(role="admin", actions=[Action.GET_CONFIG, Action.GET_METRICS]),
         ]
-        engine = AuthorizationEngine([], access_rules)
+        engine = JwtRolesResolver([], access_rules)
 
         # Single role
         allowed = engine.get_allowed_actions(["employee"])
@@ -329,20 +328,20 @@ class TestAuthorizationEngine:
     def test_complex_jsonpath_array_access(self):
         """Test complex JSONPath expressions with array access."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.EQUALS,
                 value="redhat:employees",
                 roles=["employee"],
             ),
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.resource_access.account.roles[0]",
                 operator=JsonPathOperator.EQUALS,
                 value="manage-account",
                 roles=["account_manager"],
             ),
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         jwt_claims = {
             "realm_access": {"roles": ["authenticated", "redhat:employees"]},
@@ -357,20 +356,20 @@ class TestAuthorizationEngine:
     def test_duplicate_roles_removed(self):
         """Test that duplicate roles are removed while preserving order."""
         role_rules = [
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.realm_access.roles[*]",
                 operator=JsonPathOperator.CONTAINS,
                 value="redhat",
                 roles=["redhat_user"],
             ),
-            RoleRule(
+            JwtRoleRule(
                 jsonpath="$.email",
                 operator=JsonPathOperator.CONTAINS,
                 value="@redhat.com",
                 roles=["redhat_user"],  # Same role as above
             ),
         ]
-        engine = AuthorizationEngine(role_rules, [])
+        engine = JwtRolesResolver(role_rules, [])
 
         jwt_claims = {
             "realm_access": {"roles": ["redhat:employees"]},

@@ -51,7 +51,9 @@ models_responses: dict[int | str, dict[str, Any]] = {
 
 @router.get("/models", responses=models_responses)
 @authorize(Action.GET_MODELS)
-async def models_endpoint_handler(_request: Request, auth: Any = Depends(get_auth_dependency())) -> ModelsResponse:
+async def models_endpoint_handler(
+    _request: Request, auth: Any = Depends(get_auth_dependency())
+) -> ModelsResponse:
     """
     Handle requests to the /models endpoint.
 
@@ -65,7 +67,7 @@ async def models_endpoint_handler(_request: Request, auth: Any = Depends(get_aut
     Returns:
         ModelsResponse: An object containing the list of available models.
     """
-    
+
     # Used only by the middleware
     _ = auth
 

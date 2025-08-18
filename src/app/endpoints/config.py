@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from models.config import Configuration
 from configuration import configuration
 from authorization.middleware import authorize
-from authorization.models import Action
+from models.config import Action
 from utils.endpoints import check_configuration_loaded
 
 logger = logging.getLogger(__name__)

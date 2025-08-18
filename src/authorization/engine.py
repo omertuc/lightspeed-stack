@@ -1,27 +1,142 @@
 """Authorization engine for role evaluation and access control."""
 
+from abc import ABC, abstractmethod
+import json
 import logging
-from typing import Any
+from typing import Any, FrozenSet
 
 from jsonpath_ng import parse
-from jsonpath_ng.exceptions import JSONPathError
 
-from .models import RoleRule, AccessRule, JsonPathOperator, Action
+from auth.interface import AuthTuple
+from models.config import JwtRoleRule, AccessRule, JsonPathOperator, Action
 
 logger = logging.getLogger(__name__)
 
 
-class AuthorizationEngine:
-    """Engine for evaluating authorization rules."""
+UserRoles = FrozenSet[str]
 
-    def __init__(self, role_rules: list[RoleRule], access_rules: list[AccessRule]):
+
+class AccessResolver(ABC):  # pylint: disable=too-few-public-methods
+    """Base class for all access resolution strategies."""
+
+    @abstractmethod
+    async def check_access(self, action: Action, user_roles: UserRoles) -> bool:
+        """Check if the user has access to the specified action based on their roles."""
+
+
+class NoopAccessResolver(AccessResolver):  # pylint: disable=too-few-public-methods
+    """No-op access resolver that does not perform any access checks."""
+
+    async def check_access(self, action: Action, user_roles: UserRoles) -> bool:
+        """Always return True, indicating access is granted."""
+        _ = action  # Unused
+        _ = user_roles  # Unused
+        return True
+
+
+class RoleResolutionError(Exception):
+    """Custom exception for role resolution errors."""
+
+
+class RolesResolver(ABC):  # pylint: disable=too-few-public-methods
+    """Base class for all role resolution strategies."""
+
+    @abstractmethod
+    async def resolve_roles(self, auth: AuthTuple) -> UserRoles:
+        """Given an auth tuple, return the list of user roles."""
+
+
+class NoopRolesResolver(RolesResolver):  # pylint: disable=too-few-public-methods
+    """No-op roles resolver that does not perform any role resolution."""
+
+    async def resolve_roles(self, auth: AuthTuple) -> UserRoles:
+        """Return an empty list of roles."""
+        _ = auth  # Unused
+        return frozenset()
+
+
+class JwtRolesResolver(RolesResolver):  # pylint: disable=too-few-public-methods
+    """Engine for extract roles from JWT claims using JSONPath rules."""
+
+    def __init__(self, role_rules: list[JwtRoleRule]):
         """Initialize the authorization engine.
 
         Args:
             role_rules: Rules for extracting roles from JWT claims
-            access_rules: Rules for role-based access control
         """
         self.role_rules = role_rules
+
+    async def resolve_roles(self, auth: AuthTuple) -> UserRoles:
+        """Extract roles from JWT claims using configured rules."""
+
+        jwt_claims = self._get_claims(auth)
+        return frozenset(
+            role
+            for rule in self.role_rules
+            for role in self._evaluate_role_rules(rule, jwt_claims)
+        )
+
+    @staticmethod
+    def _evaluate_role_rules(
+        rule: JwtRoleRule, jwt_claims: dict[str, Any]
+    ) -> UserRoles:
+        """Get roles from a JWT role rule if it matches the claims"""
+        return (
+            frozenset(rule.roles)
+            if __class__._evaluate_operator(
+                rule.negate,
+                [match.value for match in parse(rule.jsonpath).find(jwt_claims)],
+                rule.operator,
+                rule.value,
+            )
+            else frozenset()
+        )
+
+    @staticmethod
+    def _get_claims(auth: AuthTuple) -> dict[str, Any]:
+        """Get the JWT claims from the auth tuple."""
+        _, _, token = auth
+        jwt_claims = json.loads(token)
+
+        if not jwt_claims:
+            raise RoleResolutionError(
+                "Invalid authentication token: no JWT claims found"
+            )
+
+        return jwt_claims
+
+    @staticmethod
+    def _evaluate_operator(
+        negate: bool, match: Any, operator: JsonPathOperator, value: Any
+    ) -> bool:  # pylint: disable=too-many-branches
+        """Evaluate an operator against a match and value."""
+        result = False
+        match operator:
+            case JsonPathOperator.EQUALS:
+                result = match == value
+            case JsonPathOperator.CONTAINS:
+                result = value in match
+            case JsonPathOperator.IN:
+                result = match in value
+
+        if negate:
+            result = not result
+
+        return result
+
+
+class GenericAccessResolver(AccessResolver):  # pylint: disable=too-few-public-methods
+    """General role-based access control engine, should apply with most authentication methods."""
+
+    def __init__(self, access_rules: list[AccessRule]):
+        """Initialize the access resolver with access rules."""
+        for rule in access_rules:
+            # Since this is nonsensical, it might be a mistake, so hard fail
+            if Action.ADMIN in rule.actions and len(rule.actions) > 1:
+                raise ValueError(
+                    "Access rule with 'admin' action cannot have other actions"
+                )
+
         self.access_rules = access_rules
 
         # Build a lookup table for access rules
@@ -31,126 +146,13 @@ class AuthorizationEngine:
                 self._access_lookup[rule.role] = set()
             self._access_lookup[rule.role].update(rule.actions)
 
-    def extract_roles_from_jwt(self, jwt_claims: dict[str, Any]) -> list[str]:
-        """Extract roles from JWT claims using configured rules.
+    async def check_access(self, action: Action, user_roles: UserRoles) -> bool:
+        if action != Action.ADMIN and self.check_access(action.ADMIN, user_roles):
+            # Recurse to check if the roles allow the user to perform the admin action,
+            # if they do, then we allow any action
+            return True
 
-        Args:
-            jwt_claims: Decoded JWT claims
-
-        Returns:
-            List of roles extracted from the JWT
-        """
-        extracted_roles = []
-
-        for rule in self.role_rules:
-            try:
-                # Parse the JSONPath expression
-                jsonpath_expr = parse(rule.jsonpath)
-
-                # Find all matches in the JWT claims
-                matches = [match.value for match in jsonpath_expr.find(jwt_claims)]
-
-                if self._evaluate_rule(matches, rule):
-                    extracted_roles.extend(rule.roles)
-                    logger.debug(
-                        "Rule matched: %s %s %s -> roles: %s",
-                        rule.jsonpath,
-                        rule.operator,
-                        rule.value,
-                        rule.roles,
-                    )
-
-            except JSONPathError as e:
-                logger.warning("Invalid JSONPath expression '%s': %s", rule.jsonpath, e)
-            except (ValueError, TypeError, AttributeError) as e:
-                logger.error("Error evaluating rule %s: %s", rule.jsonpath, e)
-
-        # Remove duplicates while preserving order
-        unique_roles = []
-        seen = set()
-        for role in extracted_roles:
-            if role not in seen:
-                unique_roles.append(role)
-                seen.add(role)
-
-        logger.debug("Extracted roles from JWT: %s", unique_roles)
-        return unique_roles
-
-    def _evaluate_rule(self, matches: list[Any], rule: RoleRule) -> bool:
-        """Evaluate a role rule against matched values.
-
-        Args:
-            matches: Values found by JSONPath expression
-            rule: Rule to evaluate
-
-        Returns:
-            True if the rule matches, False otherwise
-        """
-        if not matches:
-            return False
-
-        for match in matches:
-            if self._evaluate_operator(match, rule.operator, rule.value):
-                return True
-
-        return False
-
-    def _evaluate_operator(
-        self, match: Any, operator: JsonPathOperator, value: Any
-    ) -> bool:
-        """Evaluate an operator against a match and value.
-
-        Args:
-            match: Value from JSONPath match
-            operator: Operator to use for comparison
-            value: Value to compare against
-
-        Returns:
-            True if the operator condition is met, False otherwise
-        """
-        try:
-            if operator == JsonPathOperator.EQUALS:
-                return match == value
-            if operator == JsonPathOperator.NOT_EQUALS:
-                return match != value
-            if operator == JsonPathOperator.CONTAINS:
-                if isinstance(match, str) and isinstance(value, str):
-                    return value in match
-                if isinstance(match, (list, tuple)):
-                    return value in match
-                return False
-            if operator == JsonPathOperator.NOT_CONTAINS:
-                if isinstance(match, str) and isinstance(value, str):
-                    return value not in match
-                if isinstance(match, (list, tuple)):
-                    return value not in match
-                return True
-            if operator == JsonPathOperator.IN:
-                if isinstance(value, (list, tuple)):
-                    return match in value
-                return False
-            if operator == JsonPathOperator.NOT_IN:
-                if isinstance(value, (list, tuple)):
-                    return match not in value
-                return True
-
-            logger.warning("Unknown operator: %s", operator)
-            return False
-        except (ValueError, TypeError, AttributeError) as e:
-            logger.warning("Error evaluating operator %s: %s", operator, e)
-            return False
-
-    def check_access(self, roles: list[str], action: Action) -> bool:
-        """Check if any of the given roles has access to the specified action.
-
-        Args:
-            roles: List of user roles
-            action: Action to check access for
-
-        Returns:
-            True if access is granted, False otherwise
-        """
-        for role in roles:
+        for role in user_roles:
             if role in self._access_lookup and action in self._access_lookup[role]:
                 logger.debug(
                     "Access granted: role '%s' can perform action '%s'", role, action
@@ -158,22 +160,6 @@ class AuthorizationEngine:
                 return True
 
         logger.debug(
-            "Access denied: roles %s cannot perform action '%s'", roles, action
+            "Access denied: roles %s cannot perform action '%s'", user_roles, action
         )
         return False
-
-    def get_allowed_actions(self, roles: list[str]) -> set[Action]:
-        """Get all actions allowed for the given roles.
-
-        Args:
-            roles: List of user roles
-
-        Returns:
-            Set of allowed actions
-        """
-        allowed_actions = set()
-        for role in roles:
-            if role in self._access_lookup:
-                allowed_actions.update(self._access_lookup[role])
-
-        return allowed_actions
