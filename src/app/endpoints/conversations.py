@@ -9,18 +9,18 @@ from fastapi import APIRouter, HTTPException, status, Depends
 
 from client import AsyncLlamaStackClientHolder
 from configuration import configuration
+from app.database import get_session
+from auth import get_auth_dependency
+from authorization.middleware import authorize
+from models.config import Action
+from models.database.conversations import UserConversation
 from models.responses import (
     ConversationResponse,
     ConversationDeleteResponse,
     ConversationsListResponse,
     ConversationDetails,
 )
-from models.database.conversations import UserConversation
-from auth import get_auth_dependency
-from app.database import get_session
 from utils.endpoints import check_configuration_loaded, validate_conversation_ownership
-from authorization.middleware import authorize
-from models.config import Action
 from utils.suid import check_suid
 
 logger = logging.getLogger("app.endpoints.handlers")

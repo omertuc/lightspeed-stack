@@ -26,10 +26,11 @@ async def test_readiness_probe_fails_due_to_unhealthy_providers(mocker):
         )
     ]
 
-    # Mock the Response object
+    # Mock the Response object and auth
     mock_response = Mock()
+    auth = ("test_user", "token", {})
 
-    response = await readiness_probe_get_method(mock_response)
+    response = await readiness_probe_get_method(auth=auth, response=mock_response)
 
     assert response.ready is False
     assert "test_provider" in response.reason
@@ -56,10 +57,11 @@ async def test_readiness_probe_success_when_all_providers_healthy(mocker):
         ),
     ]
 
-    # Mock the Response object
+    # Mock the Response object and auth
     mock_response = Mock()
+    auth = ("test_user", "token", {})
 
-    response = await readiness_probe_get_method(mock_response)
+    response = await readiness_probe_get_method(auth=auth, response=mock_response)
     assert response is not None
     assert isinstance(response, ReadinessResponse)
     assert response.ready is True
@@ -70,7 +72,8 @@ async def test_readiness_probe_success_when_all_providers_healthy(mocker):
 
 def test_liveness_probe():
     """Test the liveness endpoint handler."""
-    response = liveness_probe_get_method()
+    auth = ("test_user", "token", {})
+    response = liveness_probe_get_method(auth=auth)
     assert response is not None
     assert response.alive is True
 

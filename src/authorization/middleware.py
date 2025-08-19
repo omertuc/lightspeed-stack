@@ -83,11 +83,11 @@ async def _perform_authorization_check(action: Action, kwargs: dict[str, Any]) -
 
 
 def authorize(action: Action) -> Callable:
-    """Decorator to check authorization for an endpoint (async version)."""
+    """Check authorization for an endpoint (async version)."""
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             await _perform_authorization_check(action, kwargs)
             return await func(*args, **kwargs)
 

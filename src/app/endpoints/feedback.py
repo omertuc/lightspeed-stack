@@ -10,8 +10,9 @@ from fastapi import APIRouter, Request, HTTPException, Depends, status
 from auth import get_auth_dependency
 from auth.interface import AuthTuple
 from authorization.middleware import authorize
-from models.config import Action
 from configuration import configuration
+from models.config import Action
+from models.requests import FeedbackRequest
 from models.responses import (
     ErrorResponse,
     FeedbackResponse,
@@ -19,7 +20,6 @@ from models.responses import (
     UnauthorizedResponse,
     ForbiddenResponse,
 )
-from models.requests import FeedbackRequest
 from utils.suid import get_suid
 
 logger = logging.getLogger(__name__)

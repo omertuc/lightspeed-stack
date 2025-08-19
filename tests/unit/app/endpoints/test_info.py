@@ -35,7 +35,8 @@ def test_info_endpoint():
             "type": "http",
         }
     )
-    response = info_endpoint_handler(request)
+    auth = ("test_user", "token", {})
+    response = info_endpoint_handler(auth, request)
     assert response is not None
     assert response.name is not None
     assert response.version is not None

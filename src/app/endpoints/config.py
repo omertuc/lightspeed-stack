@@ -5,10 +5,9 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from models.config import Configuration
-from configuration import configuration
 from authorization.middleware import authorize
-from models.config import Action
+from configuration import configuration
+from models.config import Action, Configuration
 from utils.endpoints import check_configuration_loaded
 
 logger = logging.getLogger(__name__)

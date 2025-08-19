@@ -3,9 +3,9 @@
 import logging
 from typing import Any
 
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.params import Depends
 from llama_stack_client import APIConnectionError
-from fastapi import APIRouter, HTTPException, Request, status
 
 from client import AsyncLlamaStackClientHolder
 from configuration import configuration
@@ -67,7 +67,6 @@ async def models_endpoint_handler(
     Returns:
         ModelsResponse: An object containing the list of available models.
     """
-
     # Used only by the middleware
     _ = auth
 

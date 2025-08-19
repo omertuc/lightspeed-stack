@@ -215,9 +215,7 @@ class JwtRoleRule(BaseModel):
 
     @model_validator(mode="after")
     def check_jsonpath(self) -> Self:
-        """
-        Verify that the JSONPath expression is valid.
-        """
+        """Verify that the JSONPath expression is valid."""
         try:
             jsonpath_ng.parse(self.jsonpath)
             return self
@@ -228,9 +226,7 @@ class JwtRoleRule(BaseModel):
 
     @model_validator(mode="after")
     def check_roles(self) -> Self:
-        """
-        Ensure that at least one role is specified.
-        """
+        """Ensure that at least one role is specified."""
         if not self.roles:
             raise ValueError("At least one role must be specified in the rule")
 

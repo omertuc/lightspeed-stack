@@ -20,10 +20,10 @@ from fastapi.responses import StreamingResponse
 from auth import get_auth_dependency
 from auth.interface import AuthTuple
 from authorization.middleware import authorize
-from models.config import Action
 from client import AsyncLlamaStackClientHolder
 from configuration import configuration
 import metrics
+from models.config import Action
 from models.requests import QueryRequest
 from models.database.conversations import UserConversation
 from utils.endpoints import check_configuration_loaded, get_agent, get_system_prompt

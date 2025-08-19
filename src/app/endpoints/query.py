@@ -24,18 +24,18 @@ from client import AsyncLlamaStackClientHolder
 from configuration import configuration
 from app.database import get_session
 import metrics
-from models.database.conversations import UserConversation
-from models.responses import QueryResponse, UnauthorizedResponse, ForbiddenResponse
-from models.requests import QueryRequest, Attachment
 import constants
+from authorization.middleware import authorize
+from models.config import Action
+from models.database.conversations import UserConversation
+from models.requests import QueryRequest, Attachment
+from models.responses import QueryResponse, UnauthorizedResponse, ForbiddenResponse
 from utils.endpoints import (
     check_configuration_loaded,
     get_agent,
     get_system_prompt,
     validate_conversation_ownership,
 )
-from authorization.middleware import authorize
-from models.config import Action
 from utils.mcp_headers import mcp_headers_dependency, handle_mcp_headers_with_toolgroups
 from utils.suid import get_suid
 

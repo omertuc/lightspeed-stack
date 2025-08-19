@@ -28,7 +28,7 @@ class NoopAccessResolver(AccessResolver):  # pylint: disable=too-few-public-meth
     """No-op access resolver that does not perform any access checks."""
 
     async def check_access(self, action: Action, user_roles: UserRoles) -> bool:
-        """Always return True, indicating access is granted."""
+        """Return True always, indicating access is granted."""
         _ = action  # Unused
         _ = user_roles  # Unused
         return True
@@ -68,22 +68,19 @@ class JwtRolesResolver(RolesResolver):  # pylint: disable=too-few-public-methods
 
     async def resolve_roles(self, auth: AuthTuple) -> UserRoles:
         """Extract roles from JWT claims using configured rules."""
-
         jwt_claims = self._get_claims(auth)
         return frozenset(
             role
             for rule in self.role_rules
-            for role in self._evaluate_role_rules(rule, jwt_claims)
+            for role in self.evaluate_role_rules(rule, jwt_claims)
         )
 
     @staticmethod
-    def _evaluate_role_rules(
-        rule: JwtRoleRule, jwt_claims: dict[str, Any]
-    ) -> UserRoles:
-        """Get roles from a JWT role rule if it matches the claims"""
+    def evaluate_role_rules(rule: JwtRoleRule, jwt_claims: dict[str, Any]) -> UserRoles:
+        """Get roles from a JWT role rule if it matches the claims."""
         return (
             frozenset(rule.roles)
-            if __class__._evaluate_operator(
+            if JwtRolesResolver._evaluate_operator(
                 rule.negate,
                 [match.value for match in parse(rule.jsonpath).find(jwt_claims)],
                 rule.operator,
@@ -147,6 +144,7 @@ class GenericAccessResolver(AccessResolver):  # pylint: disable=too-few-public-m
             self._access_lookup[rule.role].update(rule.actions)
 
     async def check_access(self, action: Action, user_roles: UserRoles) -> bool:
+        """Check if the user has access to the specified action based on their roles."""
         if action != Action.ADMIN and self.check_access(action.ADMIN, user_roles):
             # Recurse to check if the roles allow the user to perform the admin action,
             # if they do, then we allow any action
