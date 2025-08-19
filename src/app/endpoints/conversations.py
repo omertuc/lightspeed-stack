@@ -20,7 +20,7 @@ from auth import get_auth_dependency
 from app.database import get_session
 from utils.endpoints import check_configuration_loaded, validate_conversation_ownership
 from authorization.middleware import authorize
-from authorization.models import Action
+from models.config import Action
 from utils.suid import check_suid
 
 logger = logging.getLogger("app.endpoints.handlers")

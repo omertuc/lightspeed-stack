@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends, status
 from auth import get_auth_dependency
 from auth.interface import AuthTuple
 from authorization.middleware import authorize
-from authorization.models import Action
+from models.config import Action
 from configuration import configuration
 from models.responses import (
     ErrorResponse,

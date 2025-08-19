@@ -8,7 +8,7 @@ from prometheus_client import (
 )
 
 from authorization.middleware import authorize
-from authorization.models import Action
+from models.config import Action
 from metrics.utils import setup_model_metrics
 
 router = APIRouter(tags=["metrics"])

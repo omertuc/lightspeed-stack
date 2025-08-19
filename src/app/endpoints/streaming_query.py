@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 from auth import get_auth_dependency
 from auth.interface import AuthTuple
 from authorization.middleware import authorize
-from authorization.models import Action
+from models.config import Action
 from client import AsyncLlamaStackClientHolder
 from configuration import configuration
 import metrics
